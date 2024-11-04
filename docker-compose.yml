@@ -2,32 +2,38 @@ version: '3.8'
 
 services:
   backend:
-    image: python:3.9
-    container_name: peakiq-backend
-    working_dir: /app
-    volumes:
-      - ./backend:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    build:
+      context: ./backend
     ports:
       - "8000:8000"
-    depends_on:
-      - redis
-      - llm_engine
+    networks:
+      - peakiq-network
 
   llm_engine:
-    image: huggingface/transformers-pytorch-cpu
-    container_name: peakiq-llm
-    
-    # Additional setup for the model will go here:
+    build:
+      context: ./llm_engine
+    ports:
+      - "8001:8001"
+    networks:
+      - peakiq-network
 
   redis:
-    image: redis:latest
-    container_name: peakiq-redis
+    image: redis:alpine
     ports:
       - "6379:6379"
+    networks:
+      - peakiq-network
 
   dashboard:
-    image: nginx:alpine
-    container_name: peakiq-dashboard
+    build:
+      context: ./dashboard
+    ports:
+      - "8080:80"
+    networks:
+      - peakiq-network
+    depends_on:
+      - backend
 
-    # Configuration for serving the dashboard will go here:
+networks:
+  peakiq-network:
+    driver: bridge

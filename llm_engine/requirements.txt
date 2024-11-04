@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+transformers
+torch  # Ensures appropriate version for your environment
