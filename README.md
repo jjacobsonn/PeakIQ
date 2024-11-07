@@ -126,6 +126,20 @@ To directly interact with the LLM engine for testing purposes:
 
 ---
 
+# Updates in Latest Version
+
+In the latest merge, implemented the following key features:
+
+1. **Core Backend Features**:
+- **Metrics Collection and Storage**: Added endpoints to collect, store, and retrieve API metrics. This includes capturing response times, status codes, and request timestamps for all API interactions.
+- **Recommendation Engine**: Integrated the LLM-powered recommendation endpoint to provide optimized suggestions for improving API performance based on usage data.
+
+2. **API Enhancements**:
+- **POST** `/api/metrics`: Collects API usage metrics and stores them in a data structure to be accessed by the frontend.
+- **GET** `/api/metrics`: Retrieves all stored metrics in real time, allowing for dynamic monitoring of API performance.
+- **POST** `/api/recommendations`: Generates performance optimization suggestions for API endpoints using the recommendation engine.
+
+
 # Acknowledgments
 
 This project was developed by Jackson Jacobson (github: @jjacobsonn). Special thanks to contributors and collaborators who supported its development.
