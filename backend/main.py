@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Dict
+import random
 
 app = FastAPI()
 
-# Global list to retain metrics data
+# Global list to store metrics
 metrics_data: List[Dict] = []
 
 class Metrics(BaseModel):
@@ -12,9 +13,8 @@ class Metrics(BaseModel):
     response_time: int
     status_code: int
     timestamp: str
-
-class RecommendationRequest(BaseModel):
-    endpoint: str
+    cpu_usage: float  # New field
+    memory_usage: float  # New field
 
 @app.post("/api/metrics")
 async def add_metrics(metrics: Metrics):
@@ -28,24 +28,37 @@ async def get_metrics():
     return {"metrics": metrics_data}
 
 @app.post("/api/recommendations")
-async def get_recommendation(data: RecommendationRequest):
-    # Filter metrics data for the specified endpoint
-    endpoint_data = [metric for metric in metrics_data if metric["endpoint"] == data.endpoint]
-    
-    # Initialize response
-    recommendation = "No recommendation at this time."
-    
-    # Example logic for recommendations based on metrics
-    if endpoint_data:
-        avg_response_time = sum(d["response_time"] for d in endpoint_data) / len(endpoint_data)
-        error_rate = sum(1 for d in endpoint_data if d["status_code"] >= 400) / len(endpoint_data)
-        
-        # Check if average response time is high
-        if avg_response_time > 200:  # Example threshold
-            recommendation = "Consider caching this endpoint to reduce response time."
-        
-        # Check if error rate is high
-        if error_rate > 0.1:  # Example threshold for 10% error rate
-            recommendation = "High error rate detected. Consider reviewing server configurations or database connections."
+async def get_recommendation(data: Dict[str, str]):
+    endpoint = data.get("endpoint", "unknown")
+    return {"recommendation": f"Consider caching the endpoint '{endpoint}' for optimization."}
 
-    return {"recommendation": recommendation}
+@app.post("/api/mock-metrics")
+async def generate_mock_metrics():
+    mock_metrics = {
+        "endpoint": "/api/mock-endpoint",
+        "response_time": random.randint(50, 300),
+        "status_code": 200,
+        "timestamp": "2024-11-03T22:10:00",
+        "cpu_usage": round(random.uniform(10.0, 90.0), 2),
+        "memory_usage": round(random.uniform(100.0, 500.0), 2)
+    }
+    metrics_data.append(mock_metrics)
+    return {"status": "Mock metrics generated", "metrics": mock_metrics}
+
+@app.get("/")
+async def read_root():
+    return {
+        "message": "Welcome to the PeakIQ Backend API",
+        "endpoints": {
+            "/api/metrics": {
+                "GET": "Retrieve collected metrics",
+                "POST": "Add new metrics"
+            },
+            "/api/recommendations": {
+                "POST": "Get optimization recommendations for an API endpoint"
+            },
+            "/api/mock-metrics": {
+                "POST": "Generate mock metrics for testing"
+            }
+        }
+    }
