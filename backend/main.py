@@ -1,13 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import random
 
 app = FastAPI()
 
-# In-memory storage for registered endpoints and metrics
+# In-memory storage for registered endpoints, metrics, and alerts
 registered_endpoints: Dict[str, Dict] = {}
 metrics_data: Dict[str, List[Dict]] = {}
+anomaly_alerts: List[Dict] = []  # Global list to store anomaly alerts
+websocket_connections: List[WebSocket] = []  # Store active WebSocket connections
+
 
 # Models
 class RegisterAPI(BaseModel):
@@ -15,6 +18,7 @@ class RegisterAPI(BaseModel):
     url: str
     threshold_response_time: Optional[int] = None  # Optional threshold for alerting
     threshold_error_rate: Optional[float] = None  # Optional error rate threshold
+
 
 class Metrics(BaseModel):
     endpoint: str
@@ -26,6 +30,7 @@ class Metrics(BaseModel):
     queue_length: int
     success_ratio: float
 
+
 @app.post("/api/register")
 async def register_api(api: RegisterAPI):
     if api.name in registered_endpoints:
@@ -34,27 +39,44 @@ async def register_api(api: RegisterAPI):
     metrics_data[api.name] = []  # Initialize metrics list for this endpoint
     return {"status": "API registered successfully", "api": api.dict()}
 
+
 @app.get("/api/register")
 async def get_registered_apis():
     return {"registered_endpoints": registered_endpoints}
+
 
 @app.post("/api/metrics")
 async def add_metrics(metrics: Metrics):
     if metrics.endpoint not in registered_endpoints:
         raise HTTPException(status_code=400, detail="Endpoint not registered")
+
     # Check for anomalies (e.g., thresholds exceeded)
     anomaly = False
     api_config = registered_endpoints[metrics.endpoint]
     if api_config.get("threshold_response_time") and metrics.response_time > api_config["threshold_response_time"]:
         anomaly = True
+
     metrics_dict = metrics.dict()
     metrics_dict["is_anomaly"] = anomaly
     metrics_data[metrics.endpoint].append(metrics_dict)
+
+    if anomaly:
+        anomaly_alert = {
+            "endpoint": metrics.endpoint,
+            "issue": "High response time",
+            "response_time": metrics.response_time,
+            "timestamp": metrics.timestamp
+        }
+        anomaly_alerts.append(anomaly_alert)
+        await notify_websockets(anomaly_alert)
+
     return {"status": "Metrics received", "is_anomaly": anomaly}
+
 
 @app.get("/api/metrics")
 async def get_metrics():
     return {"metrics": metrics_data}
+
 
 @app.post("/api/mock-metrics")
 async def generate_mock_metrics():
@@ -74,6 +96,28 @@ async def generate_mock_metrics():
     metrics_data[endpoint].append(mock_metrics)
     return {"status": "Mock metrics generated", "metrics": mock_metrics}
 
+
+@app.get("/api/alerts")
+async def get_anomaly_alerts():
+    return {"alerts": anomaly_alerts}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    websocket_connections.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()  # Keep the connection alive
+    except WebSocketDisconnect:
+        websocket_connections.remove(websocket)
+
+
+async def notify_websockets(message: Dict):
+    for connection in websocket_connections:
+        await connection.send_json(message)
+
+
 @app.get("/")
 async def read_root():
     return {
@@ -87,11 +131,12 @@ async def read_root():
                 "GET": "Retrieve grouped metrics",
                 "POST": "Add new metrics (with anomaly detection)"
             },
-            "/api/recommendations": {
-                "POST": "Get optimization recommendations for an API endpoint"
+            "/api/alerts": {
+                "GET": "Retrieve recent anomaly alerts"
             },
             "/api/mock-metrics": {
                 "POST": "Generate mock metrics for testing (with anomalies)"
-            }
+            },
+            "/ws": "WebSocket for real-time updates"
         }
     }
