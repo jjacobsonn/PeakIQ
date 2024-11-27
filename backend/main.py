@@ -1,13 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Dict
 import random
 
 app = FastAPI()
 
+# API key for authentication
+API_KEY = "secure-api-key"  # Replace with a secure, strong key
+
 # Global list to store metrics
 metrics_data: List[Dict] = []
 
+# Metrics model
 class Metrics(BaseModel):
     endpoint: str
     response_time: int
@@ -15,8 +19,15 @@ class Metrics(BaseModel):
     timestamp: str
     cpu_usage: float  # New field
     memory_usage: float  # New field
+    queue_length: int  # New field
+    success_ratio: float  # New field
 
-@app.post("/api/metrics")
+# API key verification dependency
+async def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+
+@app.post("/api/metrics", dependencies=[Depends(verify_api_key)])
 async def add_metrics(metrics: Metrics):
     global metrics_data
     metrics_data.append(metrics.dict())
@@ -40,7 +51,9 @@ async def generate_mock_metrics():
         "status_code": 200,
         "timestamp": "2024-11-03T22:10:00",
         "cpu_usage": round(random.uniform(10.0, 90.0), 2),
-        "memory_usage": round(random.uniform(100.0, 500.0), 2)
+        "memory_usage": round(random.uniform(100.0, 500.0), 2),
+        "queue_length": random.randint(0, 50),
+        "success_ratio": round(random.uniform(0.8, 1.0), 2)
     }
     metrics_data.append(mock_metrics)
     return {"status": "Mock metrics generated", "metrics": mock_metrics}
@@ -52,7 +65,7 @@ async def read_root():
         "endpoints": {
             "/api/metrics": {
                 "GET": "Retrieve collected metrics",
-                "POST": "Add new metrics"
+                "POST": "Add new metrics (requires API key)"
             },
             "/api/recommendations": {
                 "POST": "Get optimization recommendations for an API endpoint"
